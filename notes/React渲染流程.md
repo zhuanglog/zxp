@@ -1,9 +1,11 @@
-要将 React 元素渲染到页面中，分为两个阶段，render 阶段和 commit 阶段。
 
-一、render 阶段负责创建 Fiber 数据结构并为 Fiber 节点打标记，标记当前 Fiber 节点要进行的 DOM 操作。
+要将 React 元素渲染到页面中，分为两个阶段，render 阶段和 commit 阶段。 
+
+**一、render 阶段负责创建 Fiber 数据结构并为 Fiber 节点打标记，标记当前 Fiber 节点要进行的 DOM 操作。** 
 
 render阶段开始于packages/react-dom/src/client/ReactDOMLegacy.js，传入三个参数，渲染的ReactElement、渲染容器和回调函数，并将这些参数传入至legacyRenderSubtreeIntoContainer方法当中
 
+```
 /**
  * 渲染入口
  * element 要进行渲染的 ReactElement, createElement 方法的返回值
@@ -32,8 +34,11 @@ export function render(
     callback,
   );
 }
+```
+
 在legacyRenderSubtreeIntoContainer方法当中，会通过判断container对象上的属性_reactRootContainer是否存在来判断是否为初次渲染，如果没有就调用legacyCreateRootFromDOMContainer方法创建，之后无论初次渲染还是更新都会使用updateContainer方法更新渲染容器，当然初次渲染会选择不执行批量更新，最后统一调用getPublicRootInstance方法返回真实的DOM对象
 
+```
 /**
  * 将子树渲染到容器中 (初始化 Fiber 数据结构: 创建 fiberRoot 及 rootFiber)
  * parentComponent: 父组件, 初始渲染传入了 null
@@ -93,10 +98,13 @@ function legacyRenderSubtreeIntoContainer(
 
   return getPublicRootInstance(fiberRoot);
 }
+```
+
 针对legacyCreateRootFromDOMContainer方法，其主要作用在不是服务端渲染的情况下删除container当中的子节点，然后调用createLegacyRoot方法。
 
 createLegacyRoot方法中主要是使用ReactDOMBlockingRoot这个类来创建一个实例，这个实例最后会赋值给container._reactRootContainer
 
+```
 function ReactDOMBlockingRoot(
   container: Container,
   tag: RootTag,
@@ -107,11 +115,16 @@ function ReactDOMBlockingRoot(
   // container._reactRootContainer = {_internalRoot: {}}
   this._internalRoot = createRootImpl(container, tag, options);
 }
+```
 在这个实例当中会有一个属性_internalRoot，这是使用createRootImpl方法创建出来的，这个方法的核心就是createContainer方法
 
+```
 const root = createContainer(container, tag, hydrate, hydrationCallbacks);
-createContainer方法中主要地就是调用了createFiberRoot方法，其主要功能就是创建根节点对应的fiber对象，其中通过FiberRootNode创建FiberRoot对象，使用createHostRootFiber来创建rootFiber，然后将fiberRoot的current属性指向rootFiber，将rootFiber的stateNode属性指向fiberRoot，再为初始化updateQueue 对象 用于存放 Update 对象，Update对象用于记录组件状态的改变
+```
+createContainer方法中主要地就是调用了createFiberRoot方法，其主要功能就是创建根节点对应的fiber对象，其中通过FiberRootNode创建FiberRoot对象，使用createHostRootFiber来创建rootFiber，然后将fiberRoot的current属性指向rootFiber，将rootFiber的stateNode属性指向fiberRoot，再为初始化updateQueue 对象
+用于存放 Update 对象，Update对象用于记录组件状态的改变
 
+```
 // 创建根节点对应的 fiber 对象
 export function createFiberRoot(
   containerInfo: any,
@@ -132,17 +145,23 @@ export function createFiberRoot(
   // 返回 root
   return root;
 }
+```
+
 以上是legacyRenderSubtreeIntoContainer方法中为_reactRootContainer属性赋值的过程，在那之后会调用updateContainer方法进行容器的渲染
 
 在updateContainer方法当中，主要是创建一个待执行的任务update，然后使用enqueueUpdate更新任务队列，最后调用scheduleWork方法
 
+```
   const update = createUpdate(expirationTime, suspenseConfig);
   // 将 update 对象加入到当前 Fiber 的更新队列当中 (updateQueue)
   enqueueUpdate(current, update);
   // 调度和更新 current 对象
   scheduleWork(current, expirationTime);
+```
+
 在scheduleWork方法当中，首次渲染为同步非批量更新模式，会使用performSyncWorkOnRoot方法来构建workInProgress Fiber树
 
+```
   if (expirationTime === Sync) {
     if (
       // 检查是否处于非批量更新模式
@@ -155,8 +174,10 @@ export function createFiberRoot(
     }
   // 忽略了一些初始化渲染不会得到执行的代码
 }
-在performSyncWorkOnRoot方法中，首先是调用prepareFreshStack方法来创建一个新的Fiber对象，也就是新的workInProgress对象
+```
 
+在performSyncWorkOnRoot方法中，首先是调用prepareFreshStack方法来创建一个新的Fiber对象，也就是新的workInProgress对象
+```
 // 进入 render 阶段, 构建 workInProgress Fiber 树
 function performSyncWorkOnRoot(root) {
   // 参数 root 为 fiberRoot 对象
@@ -205,14 +226,20 @@ function performSyncWorkOnRoot(root) {
     }
   }
 }
+```
+
 在该方法中，全局变量workInProgressRoot会被赋值为当前的FiberRoot,而rootFiber也就是当前root的current属性会被createWorkInProgress用来创建新的Fiber对象，然后将rootFiber的属性都复制一份给它，形成新的workInProgress Fiber对象，它与当前的rootFiber使用alternate相连接
 
+```
   // 建构 workInProgress Fiber 树的 Fiber 对象
   workInProgressRoot = root;
   // 构建 workInProgress Fiber 树中的 rootFiber
   workInProgress = createWorkInProgress(root.current, null);
+```
+
 现在我们回到performSyncWorkOnRoot方法当中，调用workLoopSync方法开始更新workInProgress树的所有子节点Fiber，通过判断performUnitOfWork的返回是否为null来判断是否要继续构建fiber节点
 
+```
 function workLoopSync() {
   // workInProgress 是一个 fiber 对象
   // 它的值不为 null 意味着该 fiber 对象上仍然有更新要执行
@@ -221,8 +248,10 @@ function workLoopSync() {
     workInProgress = performUnitOfWork(workInProgress);
   }
 }
+```
 在performUnitOfWork方法中，会首先调用beginWork从父到子构建子节点，会传入workInProgress对象和rootFiber对象
 
+```
 function performUnitOfWork(unitOfWork: Fiber): Fiber | null {
   // unitOfWork => workInProgress Fiber 树中的 rootFiber
   // current => currentFiber 树中的 rootFiber
@@ -249,8 +278,12 @@ function performUnitOfWork(unitOfWork: Fiber): Fiber | null {
   }
   return next;
 }
-beginWork当中，因为是首次渲染且是根节点，所以使用updateHostRoot方法开始构建子节点，首先会把current的updateQueue复制给workInProgress，然后结合nextProps执行 该次更新，并把更新后的state赋值给workInProgress.memoizedState，其中state的属性stateNode就是nextChildren,在后面就是调用reconcileChildren方法来继续渲染子节点
+```
 
+beginWork当中，因为是首次渲染且是根节点，所以使用updateHostRoot方法开始构建子节点，首先会把current的updateQueue复制给workInProgress，然后结合nextProps执行
+该次更新，并把更新后的state赋值给workInProgress.memoizedState，其中state的属性stateNode就是nextChildren,在后面就是调用reconcileChildren方法来继续渲染子节点
+
+```
 // HostRoot => <div id="root"></div> 对应的 Fiber 对象
 // 找出 HostRoot 的子 ReactElement 并为其构建 Fiber 对象
 function updateHostRoot(current, workInProgress, renderExpirationTime) {
@@ -292,6 +325,11 @@ function updateHostRoot(current, workInProgress, renderExpirationTime) {
   // 返回子节点 fiber 对象
   return workInProgress.child;
 }
+```
+
+
+
+```
 export function reconcileChildren(
   // 旧 Fiber
   current: Fiber | null,
@@ -319,6 +357,9 @@ export function reconcileChildren(
   }
   // 忽略了 else 的情况
 }
+ ```
+
 在完成子节点渲染之后，就回到了performUnitOfWork方法中，使用completeUnitOfWork从子到父构建每个层级对应的兄弟节点，并创建真实的dom对象，最后就进入了commit阶段。
 
-commit 阶段负责根据 Fiber 节点标记 ( effectTag ) 进行相应的 DOM 操作。
+**二、commit 阶段负责根据 Fiber 节点标记 ( effectTag ) 进行相应的 DOM 操作。**
+
