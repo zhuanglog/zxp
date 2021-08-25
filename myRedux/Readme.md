@@ -1,1 +1,3 @@
+整个Redux的核心就在于createStore这个函数，这也是我们分析Redux的入口点
+
 
