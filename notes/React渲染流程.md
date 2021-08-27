@@ -328,6 +328,8 @@ function updateHostRoot(current, workInProgress, renderExpirationTime) {
 ```
 
 
+对于reconcileChildren方法，可以看到在初始渲染阶段是调用了mountChildFibers方法，
+
 
 ```
 export function reconcileChildren(
@@ -358,6 +360,17 @@ export function reconcileChildren(
   // 忽略了 else 的情况
 }
  ```
+
+mountChildFibers是ChildReconciler(false)执行后的返回结果，传入false表示不对节点添加effectTag，因为初始渲染不需要有更新的操作。
+
+```
+// 用于初始渲染
+export const mountChildFibers = ChildReconciler(false);
+```
+
+对于ChildReconciler方法而言，其主要的是返回一个reconcileChildFibers方法，在该方法当中
+
+
 
 在完成子节点渲染之后，就回到了performUnitOfWork方法中，使用completeUnitOfWork从子到父构建每个层级对应的兄弟节点，并创建真实的dom对象，最后就进入了commit阶段。
 
