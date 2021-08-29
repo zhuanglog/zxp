@@ -1,1 +1,4 @@
+本文主要从React构建virtual dom元素以及进行虚拟dom对比的流程解析。
+
+首先从React的createElement方法开始
 
