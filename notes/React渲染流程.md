@@ -367,9 +367,88 @@ mountChildFibers是ChildReconciler(false)执行后的返回结果，传入false�
 // 用于初始渲染
 export const mountChildFibers = ChildReconciler(false);
 ```
+对于ChildReconciler方法而言，其主要的是返回一个reconcileChildFibers方法，在该方法当中,传入的是父 Fiber 对象，旧的第一个子Fiber对象，和新的子Vdom对象，因为在从上到下渲染时只渲染每一级的第一个子节点。
 
-对于ChildReconciler方法而言，其主要的是返回一个reconcileChildFibers方法，在该方法当中
+具体执行时会根据子节点的不同类型做不同的渲染处理，
 
+
+
+```
+  function reconcileChildFibers(
+    // 父 Fiber 对象
+    returnFiber: Fiber,
+    // 旧的第一个子 Fiber 初始渲染 null
+    currentFirstChild: Fiber | null,
+    // 新的子 vdom 对象
+    newChild: any,
+    // 初始渲染 整型最大值 代表同步任务
+    expirationTime: ExpirationTime,
+  ): Fiber | null {
+    // 这是入口方法, 根据 newChild 类型进行对应处理
+
+    // 判断新的子 vdom 是否为占位组件 比如 <></>
+    // false
+    const isUnkeyedTopLevelFragment =
+      typeof newChild === 'object' &&
+      newChild !== null &&
+      newChild.type === REACT_FRAGMENT_TYPE &&
+      newChild.key === null;
+
+    // 如果 newChild 为占位符, 使用 占位符组件的子元素作为 newChild
+    if (isUnkeyedTopLevelFragment) {
+      newChild = newChild.props.children;
+    }
+
+    // 检测 newChild 是否为对象类型
+    const isObject = typeof newChild === 'object' && newChild !== null;
+
+    // newChild 是单个对象的情况
+    if (isObject) {
+      // 匹配子元素的类型
+      switch (newChild.$$typeof) {
+        // 子元素为 ReactElement
+        case REACT_ELEMENT_TYPE:
+          // 为 Fiber 对象设置 effectTag 属性
+          // 返回创建好的子 Fiber
+          return placeSingleChild(
+            // 处理单个 React Element 的情况
+            // 内部会调用其他方法创建对应的 Fiber 对象
+            reconcileSingleElement(
+              returnFiber,
+              currentFirstChild,
+              newChild,
+              expirationTime,
+            ),
+          );
+      }
+    }
+      
+    // 处理 children 为文本和数值的情况 return 字符串
+    if (typeof newChild === 'string' || typeof newChild === 'number') {
+      return placeSingleChild(
+        reconcileSingleTextNode(
+          returnFiber,
+          currentFirstChild,
+          // 如果 newChild 是数值, 转换为字符串
+          '' + newChild,
+          expirationTime,
+        ),
+      );
+    }
+
+    // children 是数组的情况
+    if (isArray(newChild)) {
+      // 返回创建好的子 Fiber
+      return reconcileChildrenArray(
+        returnFiber,
+        currentFirstChild,
+        newChild,
+        expirationTime,
+      );
+    }
+  }
+}
+```
 
 
 在完成子节点渲染之后，就回到了performUnitOfWork方法中，使用completeUnitOfWork从子到父构建每个层级对应的兄弟节点，并创建真实的dom对象，最后就进入了commit阶段。
