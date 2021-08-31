@@ -450,8 +450,129 @@ export const mountChildFibers = ChildReconciler(false);
 }
 ```
 
+在完成子节点渲染之后，就回到了performUnitOfWork方法中，使用completeUnitOfWork从子到父构建每个层级对应的兄弟节点.
 
-在完成子节点渲染之后，就回到了performUnitOfWork方法中，使用completeUnitOfWork从子到父构建每个层级对应的兄弟节点，并创建真实的dom对象，最后就进入了commit阶段。
+在completeUnitOfWork方法中首先会为当前节点创建一个DOM对象放置在stateNode当中，如果当前的节点还有子节点就会一直回退至workLoopSync，重新进行beginWork构建当前节点的子节点。
+
+如果没有子节点就会开始将子树和此Fiber的所有effect附加到父级的effect列表中，也就是有sibling返回兄弟节点，否则返回父亲节点继续执行completeUnitOfWork方法
+
+
+```
+function completeUnitOfWork(unitOfWork: Fiber): Fiber | null {
+  // 为 workInProgress 全局变量重新赋值
+  workInProgress = unitOfWork;
+  do {
+    // 获取备份节点
+    // 初始化渲染 非根 Fiber 对象没有备份节点 所以 current 为 null
+    const current = workInProgress.alternate;
+    // 父级 Fiber 对象, 非根 Fiber 对象都有父级
+    const returnFiber = workInProgress.return;
+    // 判断传入的 Fiber 对象是否构建完成, 任务调度相关
+    // & 是表示位的与运算, 把左右两边的数字转化为二进制
+    // 然后每一位分别进行比较, 如果相等就为1, 不相等即为0
+    // 此处应用"位与"运算符的目的是"清零"
+    // true
+    if ((workInProgress.effectTag & Incomplete) === NoEffect) {
+      let next;
+      // 如果不能使用分析器的 timer, 直接执行 completeWork
+      // enableProfilerTimer => true
+      // 但此处无论条件是否成立都会执行 completeWork
+      if (
+        !enableProfilerTimer ||
+        (workInProgress.mode & ProfileMode) === NoMode
+      ) {
+        // 重点代码(二)
+        // 创建节点真实 DOM 对象并将其添加到 stateNode 属性中
+        next = completeWork(current, workInProgress, renderExpirationTime);
+      } else {
+        // 创建节点真实 DOM 对象并将其添加到 stateNode 属性中
+        next = completeWork(current, workInProgress, renderExpirationTime);
+      }
+      // 重点代码(一)
+      // 如果子级存在
+      if (next !== null) {
+        // 返回子级 一直返回到 workLoopSync
+        // 再重新执行 performUnitOfWork 构建子级 Fiber 节点对象
+        return next;
+      }
+
+      // 构建 effect 链表结构
+      // 如果不是根 Fiber 就是 true 否则就是 false
+      // 将子树和此 Fiber 的所有 effect 附加到父级的 effect 列表中
+      if (
+        // 如果父 Fiber 存在 并且
+        returnFiber !== null &&
+        // 父 Fiber 对象中的 effectTag 为 0
+        (returnFiber.effectTag & Incomplete) === NoEffect
+      ) {
+        // 将子树和此 Fiber 的所有副作用附加到父级的 effect 列表上
+
+        // 以下两个判断的作用是搜集子 Fiber的 effect 到父 Fiber
+        if (returnFiber.firstEffect === null) {
+          // first
+          returnFiber.firstEffect = workInProgress.firstEffect;
+        }
+
+        if (workInProgress.lastEffect !== null) {
+          if (returnFiber.lastEffect !== null) {
+            // next
+            returnFiber.lastEffect.nextEffect = workInProgress.firstEffect;
+          }
+          // last
+          returnFiber.lastEffect = workInProgress.lastEffect;
+        }
+
+        // 获取副作用标记
+        // 初始渲染时除[根组件]以外的 Fiber, effectTag 值都为 0, 即不需要执行任何真实DOM操作
+        // 根组件的 effectTag 值为 3, 即需要将此节点对应的真实DOM对象添加到页面中
+        const effectTag = workInProgress.effectTag;
+
+        // 创建 effect 列表时跳过 NoWork(0) 和 PerformedWork(1) 标记
+        // PerformedWork 由 React DevTools 读取, 不提交
+        // 初始渲染时 只有遍历到了根组件 判断条件才能成立, 将 effect 链表添加到 rootFiber
+        // 初始渲染 FiberRoot 对象中的 firstEffect 和 lastEffect 都是 App 组件
+        // 因为当所有节点在内存中构建完成后, 只需要一次将所有 DOM 添加到页面中
+        if (effectTag > PerformedWork) {
+          // false
+          if (returnFiber.lastEffect !== null) {
+            returnFiber.lastEffect.nextEffect = workInProgress;
+          } else {
+            // 为 fiberRoot 添加 firstEffect
+            returnFiber.firstEffect = workInProgress;
+          }
+          // 为 fiberRoot 添加 lastEffect
+          returnFiber.lastEffect = workInProgress;
+        }
+      }
+    } else {
+    	// 忽略了初始渲染不执行的代码      
+    }
+    // 获取下一个同级 Fiber 对象
+    const siblingFiber = workInProgress.sibling;
+    // 如果下一个同级 Fiber 对象存在
+    if (siblingFiber !== null) {
+      // 返回下一个同级 Fiber 对象
+      return siblingFiber;
+    }
+    // 否则退回父级
+    workInProgress = returnFiber;
+  } while (workInProgress !== null);
+
+  // 当执行到这里的时候, 说明遍历到了 root 节点, 已完成遍历
+  // 更新 workInProgressRootExitStatus 的状态为 已完成
+  if (workInProgressRootExitStatus === RootIncomplete) {
+    workInProgressRootExitStatus = RootCompleted;
+  }
+  return null;
+}
+```
+
+
+
+最后就进入了commit阶段。
+
+
+commit 阶段负责根据 Fiber 节点标记 ( effectTag ) 进行相应的 DOM 操作。
 
 **二、commit 阶段负责根据 Fiber 节点标记 ( effectTag ) 进行相应的 DOM 操作。**
 
