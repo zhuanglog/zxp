@@ -576,3 +576,8 @@ commit 阶段负责根据 Fiber 节点标记 ( effectTag ) 进行相应的 DOM �
 
 **二、commit 阶段负责根据 Fiber 节点标记 ( effectTag ) 进行相应的 DOM 操作。**
 
+before mutation 阶段（执行 DOM 操作前）
+
+mutation 阶段（执行 DOM 操作）
+
+layout 阶段（执行 DOM 操作后）
