@@ -1,6 +1,8 @@
 
 要将 React 元素渲染到页面中，分为两个阶段，render 阶段和 commit 阶段。 
 
+简述：render阶段主要时构建一个workInProgress Fiber树，每一个fiber节点就是对应react元素节点，在构建时是采用类似与深度优先遍历的算法过程，从根节点开始从父到子构建每一层级的第一个子节点，然后在子节点为空时开始进行回溯，优先构建该层级子节点的兄弟节点，如果没有就向上寻找依次执行直至构建一颗完整的Fiber树出来,之后进入第二个阶段，根据fiber节点上构建的effectTag完成对应的DOM构建
+
 **一、render 阶段负责创建 Fiber 数据结构并为 Fiber 节点打标记，标记当前 Fiber 节点要进行的 DOM 操作。** 
 
 render阶段开始于packages/react-dom/src/client/ReactDOMLegacy.js，传入三个参数，渲染的ReactElement、渲染容器和回调函数，并将这些参数传入至legacyRenderSubtreeIntoContainer方法当中
