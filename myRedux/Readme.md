@@ -176,6 +176,16 @@ function compose () {
   }
 ```
 
+也就是以下这一部分变成当前的dispatch
+
+```
+    function (action) {
+      console.log('logger');
+      next(action)
+    }
+
+```
+
 然后针对倒数第二个函数，还是传入一个dispatch，注意此时的dispatch也就是next就是刚刚chain最后一个函数执行后返回的函数，最后返回dispatch用来替代原本的store.dispatch
 
 那么当我们调用dispatch的时候，就会按照我们注册的顺序执行下来。
